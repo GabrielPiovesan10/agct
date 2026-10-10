@@ -707,17 +707,10 @@ form { display: flex; flex-direction: column; gap: 20px; }
                         </form>
                     </div>
 
-                    <!-- Tabela de Histórico -->
+                    <!-- Agenda de Contas -->
                     <div class="glass-card table-card">
                         <div class="card-header">
-                            <h3><i class="fa-solid fa-clock-rotate-left"></i> Histórico de Contas</h3>
-                            <div class="filters">
-                                <select id="filterStatus">
-                                    <option value="all">Todos os Status</option>
-                                    <option value="pendente">Pendentes</option>
-                                    <option value="pago">Pagas</option>
-                                </select>
-                            </div>
+                            <h3><i class="fa-solid fa-list-check"></i> Agenda de Contas</h3>
                         </div>
                         <div class="table-container">
                             <table class="contas-table">
@@ -731,11 +724,35 @@ form { display: flex; flex-direction: column; gap: 20px; }
                                         <th>Ações</th>
                                     </tr>
                                 </thead>
-                                <tbody id="contasList">
+                                <tbody id="contasPendentesList">
                                     <!-- Preenchido via JS -->
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Histórico de Contas -->
+                <div class="glass-card table-card" style="margin-top: 28px;">
+                    <div class="card-header">
+                        <h3><i class="fa-solid fa-clock-rotate-left"></i> Histórico de Contas</h3>
+                    </div>
+                    <div class="table-container">
+                        <table class="contas-table">
+                            <thead>
+                                <tr>
+                                    <th>Descrição</th>
+                                    <th>Tipo</th>
+                                    <th>Vencimento</th>
+                                    <th>Valor</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="contasPagasList">
+                                <!-- Preenchido via JS -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </section>
@@ -972,8 +989,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const contasForm = document.getElementById('contasForm');
     const contaTipo = document.getElementById('contaTipo');
     const parcelasGroup = document.getElementById('parcelasGroup');
-    const contasList = document.getElementById('contasList');
-    const filterStatus = document.getElementById('filterStatus');
+    const contasPendentesList = document.getElementById('contasPendentesList');
+    const contasPagasList = document.getElementById('contasPagasList');
 
     if (contaTipo) {
         contaTipo.addEventListener('change', (e) => {
@@ -1028,45 +1045,51 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderContas() {
-        if (!contasList) return;
+        const contasPendentesList = document.getElementById('contasPendentesList');
+        const contasPagasList = document.getElementById('contasPagasList');
+        if (!contasPendentesList || !contasPagasList) return;
 
-        const filter = filterStatus ? filterStatus.value : 'all';
-        
-        let filteredContas = contas.sort((a, b) => a.vencimento.localeCompare(b.vencimento));
-        
-        if (filter !== 'all') {
-            filteredContas = filteredContas.filter(c => c.status === filter);
+        let sortedContas = contas.sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+        let pendentes = sortedContas.filter(c => c.status === 'pendente');
+        let pagas = sortedContas.filter(c => c.status === 'pago');
+
+        function generateRow(c) {
+            let tipoClass = c.tipo === 'Compra Única' ? 'unica' : c.tipo.toLowerCase();
+            let tipoBadge = `<span class="badge ${tipoClass}">${c.tipo}</span>`;
+            let pInfo = c.tipo === 'Parcelada' ? `<span class="parcela-info">${c.parcelaAtual}/${c.parcelaTotal}</span>` : '';
+            let isPago = c.status === 'pago';
+            
+            return `
+                <tr style="${isPago ? 'opacity: 0.6;' : ''}">
+                    <td>
+                        <strong style="color: ${isPago ? 'var(--text-muted)' : 'var(--text-main)'}">${c.desc}</strong>
+                        ${pInfo}
+                    </td>
+                    <td>${tipoBadge}</td>
+                    <td>${formatDateBR(c.vencimento)}</td>
+                    <td style="font-weight:600; color: ${isPago ? 'var(--text-muted)' : 'var(--text-main)'}">${formatCurrency(c.val)}</td>
+                    <td>
+                        <button class="status-btn ${isPago ? 'pago' : 'pendente'}" data-id="${c.id}" title="${isPago ? 'Marcar como Pendente' : 'Marcar como Pago'}">
+                            <i class="fa-solid ${isPago ? 'fa-circle-check' : 'fa-circle'}"></i>
+                        </button>
+                    </td>
+                    <td>
+                        <button class="delete-btn" data-id="${c.id}" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
         }
 
-        if (filteredContas.length === 0) {
-            contasList.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 40px; color: var(--text-muted); opacity: 0.8;"><i class="fa-solid fa-box-open" style="font-size:30px; margin-bottom:10px; display:block;"></i>Nenhuma conta encontrada para o filtro atual.</td></tr>`;
+        if (pendentes.length === 0) {
+            contasPendentesList.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 40px; color: var(--text-muted); opacity: 0.8;"><i class="fa-solid fa-box-open" style="font-size:30px; margin-bottom:10px; display:block;"></i>Tudo em dia! Nenhuma conta pendente.</td></tr>`;
         } else {
-            contasList.innerHTML = filteredContas.map(c => {
-                let tipoClass = c.tipo === 'Compra Única' ? 'unica' : c.tipo.toLowerCase();
-                let tipoBadge = `<span class="badge ${tipoClass}">${c.tipo}</span>`;
-                let pInfo = c.tipo === 'Parcelada' ? `<span class="parcela-info">${c.parcelaAtual}/${c.parcelaTotal}</span>` : '';
-                let isPago = c.status === 'pago';
-                
-                return `
-                    <tr style="${isPago ? 'opacity: 0.6;' : ''}">
-                        <td>
-                            <strong style="color: ${isPago ? 'var(--text-muted)' : 'var(--text-main)'}">${c.desc}</strong>
-                            ${pInfo}
-                        </td>
-                        <td>${tipoBadge}</td>
-                        <td>${formatDateBR(c.vencimento)}</td>
-                        <td style="font-weight:600; color: ${isPago ? 'var(--text-muted)' : 'var(--text-main)'}">${formatCurrency(c.val)}</td>
-                        <td>
-                            <button class="status-btn ${isPago ? 'pago' : 'pendente'}" data-id="${c.id}" title="${isPago ? 'Marcar como Pendente' : 'Marcar como Pago'}">
-                                <i class="fa-solid ${isPago ? 'fa-circle-check' : 'fa-circle'}"></i>
-                            </button>
-                        </td>
-                        <td>
-                            <button class="delete-btn" data-id="${c.id}" title="Excluir"><i class="fa-solid fa-trash"></i></button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
+            contasPendentesList.innerHTML = pendentes.map(generateRow).join('');
+        }
+
+        if (pagas.length === 0) {
+            contasPagasList.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 40px; color: var(--text-muted); opacity: 0.8;"><i class="fa-solid fa-box-open" style="font-size:30px; margin-bottom:10px; display:block;"></i>Nenhuma conta paga ainda.</td></tr>`;
+        } else {
+            contasPagasList.innerHTML = pagas.map(generateRow).join('');
         }
 
         // Add Listeners
@@ -1151,9 +1174,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (document.getElementById('totalGeral')) document.getElementById('totalGeral').innerText = formatCurrency(total);
     }
 
-    if (filterStatus) {
-        filterStatus.addEventListener('change', renderContas);
-    }
+
 
     // Initial render
     renderCalendar();
