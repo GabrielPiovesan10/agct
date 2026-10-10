@@ -528,6 +528,58 @@ form { display: flex; flex-direction: column; gap: 20px; }
     to { transform: translateX(120%); opacity: 0; }
 }
 
+/* Modal */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.modal-overlay.active {
+    display: flex;
+    opacity: 1;
+}
+.modal-content {
+    width: 90%;
+    max-width: 400px;
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+.modal-overlay.active .modal-content {
+    transform: scale(1);
+}
+.modal-actions {
+    display: flex;
+    gap: 16px;
+    margin-top: 24px;
+    justify-content: flex-end;
+}
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-main);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 12px 20px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: 0.3s;
+    font-family: inherit;
+}
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+.btn-primary.modal-btn {
+    padding: 12px 24px;
+    margin-top: 0;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
     .dashboard-grid { grid-template-columns: 1fr; }
@@ -762,6 +814,18 @@ form { display: flex; flex-direction: column; gap: 20px; }
     <!-- Notificações Toast -->
     <div id="toast-container"></div>
     
+    <!-- Modal de Confirmação -->
+    <div id="confirmModal" class="modal-overlay">
+        <div class="glass-card modal-content">
+            <h3 id="modalTitle" style="margin-bottom:12px; border:none; padding:0;"><i class="fa-solid fa-circle-question" style="color: var(--warning);"></i> Confirmar</h3>
+            <p id="modalMessage" style="color: var(--text-muted); font-size: 16px; line-height: 1.5;"></p>
+            <div class="modal-actions">
+                <button id="modalCancel" class="btn-secondary">Cancelar</button>
+                <button id="modalConfirm" class="btn-primary modal-btn">Confirmar</button>
+            </div>
+        </div>
+    </div>
+    
     <script>
 document.addEventListener('DOMContentLoaded', () => {
     // =====================================
@@ -822,6 +886,31 @@ document.addEventListener('DOMContentLoaded', () => {
             toast.style.animation = 'slideOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards';
             setTimeout(() => toast.remove(), 400);
         }, 3500);
+    }
+
+    function showConfirmModal(title, message, onConfirm) {
+        const modal = document.getElementById('confirmModal');
+        document.getElementById('modalTitle').innerHTML = title;
+        document.getElementById('modalMessage').innerText = message;
+        
+        const confirmBtn = document.getElementById('modalConfirm');
+        const cancelBtn = document.getElementById('modalCancel');
+        
+        const newConfirm = confirmBtn.cloneNode(true);
+        const newCancel = cancelBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirm, confirmBtn);
+        cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+        
+        modal.classList.add('active');
+        
+        newCancel.addEventListener('click', () => {
+            modal.classList.remove('active');
+        });
+        
+        newConfirm.addEventListener('click', () => {
+            modal.classList.remove('active');
+            onConfirm();
+        });
     }
 
     function formatCurrency(val) {
@@ -931,14 +1020,18 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add delete listeners
         document.querySelectorAll('.delete-ag-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                if (confirm('Cancelar este agendamento?')) {
-                    const id = e.currentTarget.getAttribute('data-id');
-                    agendamentos = agendamentos.filter(a => a.id !== id);
-                    localStorage.setItem('unhas_agenda', JSON.stringify(agendamentos));
-                    renderCalendar();
-                    renderDailyEvents();
-                    showToast('Agendamento cancelado.');
-                }
+                const id = e.currentTarget.getAttribute('data-id');
+                showConfirmModal(
+                    '<i class="fa-solid fa-calendar-xmark" style="color: var(--danger);"></i> Cancelar Agendamento',
+                    'Tem certeza que deseja cancelar este agendamento?',
+                    () => {
+                        agendamentos = agendamentos.filter(a => a.id !== id);
+                        localStorage.setItem('unhas_agenda', JSON.stringify(agendamentos));
+                        renderCalendar();
+                        renderDailyEvents();
+                        showToast('Agendamento cancelado.');
+                    }
+                );
             });
         });
     }
@@ -1069,7 +1162,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${formatDateBR(c.vencimento)}</td>
                     <td style="font-weight:600; color: ${isPago ? 'var(--text-muted)' : 'var(--text-main)'}">${formatCurrency(c.val)}</td>
                     <td>
-                        <button class="status-btn ${isPago ? 'pago' : 'pendente'}" data-id="${c.id}" title="${isPago ? 'Marcar como Pendente' : 'Marcar como Pago'}">
+                        <button class="${isPago ? 'paid-icon' : 'status-btn pendente'}" data-id="${c.id}" ${isPago ? 'disabled style="cursor:default; border:none; background:none; font-size:22px; color:var(--success); filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.5));"' : 'title="Marcar como Pago"'}>
                             <i class="fa-solid ${isPago ? 'fa-circle-check' : 'fa-circle'}"></i>
                         </button>
                     </td>
@@ -1097,58 +1190,70 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', (e) => {
                 const id = e.currentTarget.getAttribute('data-id');
                 const conta = contas.find(c => c.id === id);
-                if (conta) {
-                    if (conta.status === 'pendente') {
-                        conta.status = 'pago';
-                        
-                        if (conta.tipo === 'Fixa' && !conta.nextGenerated) {
-                            let dataBase = new Date(conta.vencimento + 'T12:00:00');
-                            dataBase.setMonth(dataBase.getMonth() + 1);
-                            const nextVenc = `${dataBase.getFullYear()}-${String(dataBase.getMonth() + 1).padStart(2, '0')}-${String(dataBase.getDate()).padStart(2, '0')}`;
+                if (conta && conta.status === 'pendente') {
+                    showConfirmModal(
+                        '<i class="fa-solid fa-circle-check" style="color: var(--success);"></i> Confirmar Pagamento',
+                        `Tem certeza que deseja marcar "${conta.desc}" como pago?`,
+                        () => {
+                            conta.status = 'pago';
+                            let msgAdicional = '';
                             
-                            contas.push({
-                                id: Date.now().toString() + Math.random(),
-                                desc: conta.desc,
-                                val: conta.val,
-                                vencimento: nextVenc,
-                                tipo: 'Fixa',
-                                status: 'pendente'
-                            });
-                            conta.nextGenerated = true;
-                        } else if (conta.tipo === 'Parcelada' && conta.parcelaAtual < conta.parcelaTotal && !conta.nextGenerated) {
-                            let dataBase = new Date(conta.vencimento + 'T12:00:00');
-                            dataBase.setMonth(dataBase.getMonth() + 1);
-                            const nextVenc = `${dataBase.getFullYear()}-${String(dataBase.getMonth() + 1).padStart(2, '0')}-${String(dataBase.getDate()).padStart(2, '0')}`;
+                            if (conta.tipo === 'Fixa' && !conta.nextGenerated) {
+                                let dataBase = new Date(conta.vencimento + 'T12:00:00');
+                                dataBase.setMonth(dataBase.getMonth() + 1);
+                                const nextVenc = `${dataBase.getFullYear()}-${String(dataBase.getMonth() + 1).padStart(2, '0')}-${String(dataBase.getDate()).padStart(2, '0')}`;
+                                
+                                contas.push({
+                                    id: Date.now().toString() + Math.random(),
+                                    desc: conta.desc,
+                                    val: conta.val,
+                                    vencimento: nextVenc,
+                                    tipo: 'Fixa',
+                                    status: 'pendente'
+                                });
+                                conta.nextGenerated = true;
+                                msgAdicional = ' O mês seguinte foi gerado na agenda.';
+                            } else if (conta.tipo === 'Parcelada' && conta.parcelaAtual < conta.parcelaTotal && !conta.nextGenerated) {
+                                let dataBase = new Date(conta.vencimento + 'T12:00:00');
+                                dataBase.setMonth(dataBase.getMonth() + 1);
+                                const nextVenc = `${dataBase.getFullYear()}-${String(dataBase.getMonth() + 1).padStart(2, '0')}-${String(dataBase.getDate()).padStart(2, '0')}`;
+                                
+                                contas.push({
+                                    id: Date.now().toString() + Math.random(),
+                                    desc: conta.desc,
+                                    val: conta.val,
+                                    vencimento: nextVenc,
+                                    tipo: 'Parcelada',
+                                    status: 'pendente',
+                                    parcelaAtual: conta.parcelaAtual + 1,
+                                    parcelaTotal: conta.parcelaTotal
+                                });
+                                conta.nextGenerated = true;
+                                msgAdicional = ' A próxima parcela foi gerada na agenda.';
+                            }
                             
-                            contas.push({
-                                id: Date.now().toString() + Math.random(),
-                                desc: conta.desc,
-                                val: conta.val,
-                                vencimento: nextVenc,
-                                tipo: 'Parcelada',
-                                status: 'pendente',
-                                parcelaAtual: conta.parcelaAtual + 1,
-                                parcelaTotal: conta.parcelaTotal
-                            });
-                            conta.nextGenerated = true;
+                            localStorage.setItem('unhas_contas', JSON.stringify(contas));
+                            renderContas();
+                            showToast(`Conta paga!${msgAdicional}`);
                         }
-                    } else {
-                        conta.status = 'pendente';
-                    }
-                    localStorage.setItem('unhas_contas', JSON.stringify(contas));
-                    renderContas();
+                    );
                 }
             });
         });
 
         document.querySelectorAll('.delete-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                if (confirm('Tem certeza que deseja excluir esta conta do histórico?')) {
-                    const id = e.currentTarget.getAttribute('data-id');
-                    contas = contas.filter(c => c.id !== id);
-                    localStorage.setItem('unhas_contas', JSON.stringify(contas));
-                    renderContas();
-                }
+                const id = e.currentTarget.getAttribute('data-id');
+                showConfirmModal(
+                    '<i class="fa-solid fa-trash" style="color: var(--danger);"></i> Excluir Conta',
+                    'Tem certeza que deseja excluir esta conta permanentemente?',
+                    () => {
+                        contas = contas.filter(c => c.id !== id);
+                        localStorage.setItem('unhas_contas', JSON.stringify(contas));
+                        renderContas();
+                        showToast('Conta excluída.');
+                    }
+                );
             });
         });
 
