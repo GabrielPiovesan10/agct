@@ -390,7 +390,7 @@ form { display: flex; flex-direction: column; gap: 20px; }
 }
 
 .metric-card .icon-fixa { color: #3b82f6; background: rgba(59,130,246,0.15); box-shadow: 0 0 15px rgba(59,130,246,0.2); }
-.metric-card .icon-mensal { color: #8b5cf6; background: rgba(139,92,246,0.15); box-shadow: 0 0 15px rgba(139,92,246,0.2); }
+.metric-card .icon-unica { color: #8b5cf6; background: rgba(139,92,246,0.15); box-shadow: 0 0 15px rgba(139,92,246,0.2); }
 .metric-card .icon-parcelada { color: #f59e0b; background: rgba(245,158,11,0.15); box-shadow: 0 0 15px rgba(245,158,11,0.2); }
 
 .metric-card.highlight {
@@ -456,7 +456,7 @@ form { display: flex; flex-direction: column; gap: 20px; }
 
 .badge { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
 .badge.fixa { background: rgba(59,130,246,0.15); color: #60a5fa; }
-.badge.mensal { background: rgba(139,92,246,0.15); color: #a78bfa; }
+.badge.unica { background: rgba(139,92,246,0.15); color: #a78bfa; }
 .badge.parcelada { background: rgba(245,158,11,0.15); color: #fbbf24; }
 
 .status-btn {
@@ -635,7 +635,7 @@ form { display: flex; flex-direction: column; gap: 20px; }
             <section id="contas-view" class="view-section">
                 <header class="section-header">
                     <h1>Gestão de Contas</h1>
-                    <p>Controle financeiro de contas fixas, mensais (avulsas) e parceladas.</p>
+                    <p>Controle financeiro de compras únicas, contas fixas e parceladas.</p>
                 </header>
 
                 <!-- Cards de Resumo Financeiro -->
@@ -648,10 +648,10 @@ form { display: flex; flex-direction: column; gap: 20px; }
                         </div>
                     </div>
                     <div class="metric-card">
-                        <i class="fa-solid fa-calendar-days icon-mensal"></i>
+                        <i class="fa-solid fa-basket-shopping icon-unica"></i>
                         <div class="info">
-                            <span>Mensais Pendentes</span>
-                            <h3 id="totalMensais">R$ 0,00</h3>
+                            <span>Compras Únicas</span>
+                            <h3 id="totalUnicas">R$ 0,00</h3>
                         </div>
                     </div>
                     <div class="metric-card">
@@ -693,8 +693,8 @@ form { display: flex; flex-direction: column; gap: 20px; }
                                 <div class="form-group">
                                     <label>Tipo de Conta</label>
                                     <select id="contaTipo" required>
+                                        <option value="Compra Única">Compra Única</option>
                                         <option value="Fixa">Fixa</option>
-                                        <option value="Mensal">Mensal (Avulsa)</option>
                                         <option value="Parcelada">Parcelada</option>
                                     </select>
                                 </div>
@@ -998,27 +998,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const parcelas = parseInt(document.getElementById('contaParcelas').value);
                 const valParcela = val / parcelas;
                 
-                let dataBase = new Date(vencimento + 'T12:00:00');
-                for (let i = 1; i <= parcelas; i++) {
-                    const mes = dataBase.getMonth() + 1;
-                    const ano = dataBase.getFullYear();
-                    const dia = String(dataBase.getDate()).padStart(2, '0');
-                    const dataVenc = `${ano}-${String(mes).padStart(2, '0')}-${dia}`;
-                    
-                    contas.push({
-                        id: Date.now().toString() + i,
-                        desc: desc,
-                        val: valParcela,
-                        vencimento: dataVenc,
-                        tipo: tipo,
-                        status: 'pendente',
-                        parcelaAtual: i,
-                        parcelaTotal: parcelas
-                    });
-                    
-                    // Add 1 month for next installment
-                    dataBase.setMonth(dataBase.getMonth() + 1);
-                }
+                contas.push({
+                    id: Date.now().toString(),
+                    desc: desc,
+                    val: valParcela,
+                    vencimento: vencimento,
+                    tipo: tipo,
+                    status: 'pendente',
+                    parcelaAtual: 1,
+                    parcelaTotal: parcelas
+                });
             } else {
                 contas.push({
                     id: Date.now().toString(),
@@ -1053,8 +1042,9 @@ document.addEventListener('DOMContentLoaded', () => {
             contasList.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 40px; color: var(--text-muted); opacity: 0.8;"><i class="fa-solid fa-box-open" style="font-size:30px; margin-bottom:10px; display:block;"></i>Nenhuma conta encontrada para o filtro atual.</td></tr>`;
         } else {
             contasList.innerHTML = filteredContas.map(c => {
-                let tipoBadge = `<span class="badge ${c.tipo.toLowerCase()}">${c.tipo}</span>`;
-                let pInfo = c.tipo === 'Parcelada' ? `<span class="parcela-info">Parcela ${c.parcelaAtual}/${c.parcelaTotal}</span>` : '';
+                let tipoClass = c.tipo === 'Compra Única' ? 'unica' : c.tipo.toLowerCase();
+                let tipoBadge = `<span class="badge ${tipoClass}">${c.tipo}</span>`;
+                let pInfo = c.tipo === 'Parcelada' ? `<span class="parcela-info">${c.parcelaAtual}/${c.parcelaTotal}</span>` : '';
                 let isPago = c.status === 'pago';
                 
                 return `
@@ -1085,7 +1075,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 const id = e.currentTarget.getAttribute('data-id');
                 const conta = contas.find(c => c.id === id);
                 if (conta) {
-                    conta.status = conta.status === 'pendente' ? 'pago' : 'pendente';
+                    if (conta.status === 'pendente') {
+                        conta.status = 'pago';
+                        
+                        if (conta.tipo === 'Fixa' && !conta.nextGenerated) {
+                            let dataBase = new Date(conta.vencimento + 'T12:00:00');
+                            dataBase.setMonth(dataBase.getMonth() + 1);
+                            const nextVenc = `${dataBase.getFullYear()}-${String(dataBase.getMonth() + 1).padStart(2, '0')}-${String(dataBase.getDate()).padStart(2, '0')}`;
+                            
+                            contas.push({
+                                id: Date.now().toString() + Math.random(),
+                                desc: conta.desc,
+                                val: conta.val,
+                                vencimento: nextVenc,
+                                tipo: 'Fixa',
+                                status: 'pendente'
+                            });
+                            conta.nextGenerated = true;
+                        } else if (conta.tipo === 'Parcelada' && conta.parcelaAtual < conta.parcelaTotal && !conta.nextGenerated) {
+                            let dataBase = new Date(conta.vencimento + 'T12:00:00');
+                            dataBase.setMonth(dataBase.getMonth() + 1);
+                            const nextVenc = `${dataBase.getFullYear()}-${String(dataBase.getMonth() + 1).padStart(2, '0')}-${String(dataBase.getDate()).padStart(2, '0')}`;
+                            
+                            contas.push({
+                                id: Date.now().toString() + Math.random(),
+                                desc: conta.desc,
+                                val: conta.val,
+                                vencimento: nextVenc,
+                                tipo: 'Parcelada',
+                                status: 'pendente',
+                                parcelaAtual: conta.parcelaAtual + 1,
+                                parcelaTotal: conta.parcelaTotal
+                            });
+                            conta.nextGenerated = true;
+                        }
+                    } else {
+                        conta.status = 'pendente';
+                    }
                     localStorage.setItem('unhas_contas', JSON.stringify(contas));
                     renderContas();
                 }
@@ -1107,20 +1133,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function calculateMetrics() {
-        let tFixas = 0, tMensais = 0, tParceladas = 0;
+        let tFixas = 0, tUnicas = 0, tParceladas = 0;
 
         contas.forEach(c => {
             if (c.status === 'pendente') {
                 if (c.tipo === 'Fixa') tFixas += c.val;
-                if (c.tipo === 'Mensal') tMensais += c.val;
+                if (c.tipo === 'Compra Única') tUnicas += c.val;
                 if (c.tipo === 'Parcelada') tParceladas += c.val;
             }
         });
 
-        const total = tFixas + tMensais + tParceladas;
+        const total = tFixas + tUnicas + tParceladas;
 
         if (document.getElementById('totalFixas')) document.getElementById('totalFixas').innerText = formatCurrency(tFixas);
-        if (document.getElementById('totalMensais')) document.getElementById('totalMensais').innerText = formatCurrency(tMensais);
+        if (document.getElementById('totalUnicas')) document.getElementById('totalUnicas').innerText = formatCurrency(tUnicas);
         if (document.getElementById('totalParceladas')) document.getElementById('totalParceladas').innerText = formatCurrency(tParceladas);
         if (document.getElementById('totalGeral')) document.getElementById('totalGeral').innerText = formatCurrency(total);
     }
